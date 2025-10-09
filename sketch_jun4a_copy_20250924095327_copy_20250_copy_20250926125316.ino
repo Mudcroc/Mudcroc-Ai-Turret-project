@@ -1,17 +1,28 @@
 #include "HUSKYLENS.h"
 #include "SoftwareSerial.h"
+#include "Servo.h"
+
 
 HUSKYLENS huskylens;
 SoftwareSerial mySerial(7, 9); // RX, TX (Arduino side)
 
-int led = 8;
+int ledFiring = 8;
+
+Servo trackerServo;
+
+#define SERVO_PIN 10
+#define SCREEN_CENTER 160  // HuskyLens X center (320 / 2)
+#define SCREEN_WIDTH 320
+
+int servoPos = 90;          // start facing center (0–180° range)
+int deadZone = 10;
 
 void setup() {
   Serial.begin(9600);
   mySerial.begin(9600);
-  pinMode(led, OUTPUT);
-
-
+  trackerServo.attach(SERVO_PIN);
+  trackerServo.write(servoPos);
+  pinMode(ledFiring, OUTPUT);
   if (!huskylens.begin(mySerial)) {
     Serial.println("HuskyLens not connected! Check wiring & protocol.");
     while (1);
@@ -28,6 +39,11 @@ void loop() {
 
   for (int i = 0; i < huskylens.count(); i++) {
     HUSKYLENSResult result = huskylens.get(i);
+
+    int distanceFromCenter = result.xCenter - SCREEN_CENTER;
+    
+    int brightness = map(abs(distanceFromCenter), 0, SCREEN_CENTER, 0, 255);
+    brightness = constrain(brightness, 0, 255);
 
     Serial.print("Detected ID: ");
     Serial.println(result.ID);
@@ -50,15 +66,25 @@ void loop() {
      else {
       huskylens.customText("Unknown", result.xCenter, result.yCenter - 20);
     }
-     if(result.ID == 1) {
+    int targetPos = map(result.xCenter, 0, SCREEN_WIDTH, 170, 10);
+    servoPos = servoPos + (targetPos - servoPos) / 5;  // move 1/5 of the difference each loop
+    trackerServo.write(servoPos);
+
+  Serial.print("Offset: ");
+  Serial.print(distanceFromCenter);
+  Serial.print(" | Servo angle: ");
+  Serial.println(servoPos);
+   if (result.ID != 1){
       digitalWrite(8, HIGH);
-      Serial.println("led on");
-      delay(1000);
-      digitalWrite(8, LOW);
-     }
-    else{
-      digitalWrite(8, LOW);
-      Serial.println("led off");
+      Serial.println("spining firing motors");
     }
-  }
+    else {
+    Serial.println("not firing");
+    digitalWrite(8, LOW);
+    }
 }
+
+    delay(50); // small delay for stability
+   
+  }
+  
